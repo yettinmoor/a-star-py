@@ -1,95 +1,101 @@
 class Node:
 
+    target = None
+    field = {}
+
     def __init__(self, x, y, type_):
         self.x = x
         self.y = y
-        self.type = type_
-        self.fcost = self.hcost = 0
+        Node.field[(x, y)] = self
+
+        if (type_ == 'target'):
+            self.type = 'unseen'
+            Node.target = self
+        else:
+            self.type = type_
+
+        self.gcost = self.hcost = 0
         self.parent = None
 
     @property
     def cost(self):
-        return self.fcost + self.hcost
+        return self.gcost + self.hcost
 
-    def __equals__(self, o):
-        return self.x == o.x and self.y == o.y
+    def cost_to_node(self, node):
+        dx, dy = abs(self.x - node.x), abs(self.y - node.y)
+        return 14 * min(dx, dy) + 10 * abs(dx - dy)
 
-
-class Field:
-
-    def __init__(self, filename):
-
-        types = { 'X': 'obstacle', '@': 'target', 'O': 'open', '.': 'unseen', '!': 'closed' }
-        with open(filename) as f:
-            self.ascii_field = [r.strip() for r in f.readlines()]
-
-        self.nodes = [[Node(x, y, types[node]) for x, node in enumerate(row)] for y, row in enumerate(self.ascii_field)]
-
-        # Remember target position, set it to unseen
-        for n in sum(self.nodes, []):
-            if n.type == 'target':
-                self.target = n
-                n.type = 'unseen'
-
-    def filter_types(self, type_):
-        return [n for row in self.nodes for n in row if n.type == type_]
-
-    def get_neighbors(self, node):
+    def get_neighbors(self):
         neighbors = []
         for dy in range(-1, 2):
             for dx in range(-1, 2):
-                try:
-                    neighbors.append(self.nodes[node.y + dy][node.x + dx])
-                except IndexError:
-                    continue
-        return neighbors
-
-    def cost_to_target(self, node):
-        dx, dy = abs(node.x - self.target.x), abs(node.y - self.target.y)
-        return 14 * min(dx, dy) + 10 * abs(dx - dy)
+                neighbors.append(Node.field.get((self.x + dx, self.y + dy), None))
+        return [n for n in neighbors if n]
 
     def get_path(self):
-        node = field.target
+        node = self
         path = []
         while (node := node.parent):
             path.append(node)
         return path
 
-    def print(self):
-        pathed_field = [[c for c in row] for row in self.ascii_field]
-        for node in self.get_path():
-            pathed_field[node.y][node.x] = '!'
-        for row in pathed_field:
-            print(''.join(row))
+    @staticmethod
+    def filter_types(type_):
+        return [n for n in Node.field.values() if n.type == type_]
 
 
-field = Field('astar.txt')
+def generate_field(filename):
 
-while True:
+    types = { 'X': 'obstacle', '@': 'target', 'O': 'open', '.': 'unseen', '!': 'closed' }
 
-    current = None
-    for n in field.filter_types('open'):
-        if not current or n.cost < current.cost:
-            current = n
+    with open(filename) as f:
+        ascii_field = [r.strip() for r in f.readlines()]
+        for y, row in enumerate(ascii_field):
+            for x, node in enumerate(row):
+                Node(x, y, types[node])
 
-    if current == field.target:
-        break;
+        return ascii_field
 
-    current.type = 'closed'
 
-    # Loop through neighbors
-    for n in field.get_neighbors(current):
+def find_path():
 
-        if n.type in ['open', 'unseen']:
+    while True:
 
-            # G cost
-            new_fcost = current.fcost + (10 if (current.x - n.x) * (current.y - n.y) == 0 else 14)
-            new_hcost = field.cost_to_target(n)
+        current = None
+        for n in [n for n in Node.field.values() if n.type == 'open']:
+            if not current or n.cost < current.cost:
+                current = n
 
-            if n.type == 'unseen' or new_fcost + new_hcost < n.cost:
-                n.type = 'open'
-                n.fcost = new_fcost
-                n.hcost = new_hcost
-                n.parent = current
+        if current is Node.target:
+            break
 
-field.print()
+        current.type = 'closed'
+
+        for n in current.get_neighbors():
+
+            if n and n.type in ['open', 'unseen']:
+
+                new_gcost = current.gcost + current.cost_to_node(n)
+                new_hcost = n.cost_to_node(Node.target)
+
+                if n.type == 'unseen' or new_gcost + new_hcost < n.cost:
+                    n.type = 'open'
+                    n.gcost = new_gcost
+                    n.hcost = new_hcost
+                    n.parent = current
+
+
+def print_completed_path(ascii_field):
+
+    pathed_field = [[c for c in row] for row in ascii_field]
+
+    for node in Node.target.get_path():
+        pathed_field[node.y][node.x] = '!'
+
+    for row in pathed_field:
+        print(''.join(row))
+
+
+ascii_field = generate_field('astar.txt')
+find_path()
+print_completed_path(ascii_field)
