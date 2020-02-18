@@ -30,7 +30,7 @@ class Node:
         for dy in range(-1, 2):
             for dx in range(-1, 2):
                 neighbors.append(Node.field.get((self.x + dx, self.y + dy), None))
-        return [n for n in neighbors if n]
+        return [n for n in neighbors if n and n.type in ['discovered', 'unseen']]
 
     def get_path(self):
         node = self
@@ -39,14 +39,10 @@ class Node:
             path.append(node)
         return path
 
-    @staticmethod
-    def filter_types(type_):
-        return [n for n in Node.field.values() if n.type == type_]
-
 
 def generate_field(filename):
 
-    types = { 'X': 'obstacle', '@': 'target', 'O': 'open', '.': 'unseen', '!': 'closed' }
+    types = { 'X': 'obstacle', '@': 'target', 'O': 'discovered', '.': 'unseen' }
 
     with open(filename) as f:
         ascii_field = [r.strip() for r in f.readlines()]
@@ -54,7 +50,7 @@ def generate_field(filename):
             for x, node in enumerate(row):
                 Node(x, y, types[node])
 
-        return ascii_field
+    return ascii_field
 
 
 def find_path():
@@ -62,27 +58,24 @@ def find_path():
     while True:
 
         current = None
-        for n in [n for n in Node.field.values() if n.type == 'open']:
+        for n in [n for n in Node.field.values() if n.type == 'discovered']:
             if not current or n.cost < current.cost:
                 current = n
 
         if current is Node.target:
             break
 
-        current.type = 'closed'
+        current.type = 'visited'
 
-        for n in current.get_neighbors():
+        for n in current.get_neighbors(): # Returns only non-obstacle unseen/discovered nodes
 
-            if n and n.type in ['open', 'unseen']:
+            new_gcost = current.gcost + current.cost_to_node(n)
+            new_hcost = n.cost_to_node(Node.target)
 
-                new_gcost = current.gcost + current.cost_to_node(n)
-                new_hcost = n.cost_to_node(Node.target)
-
-                if n.type == 'unseen' or new_gcost + new_hcost < n.cost:
-                    n.type = 'open'
-                    n.gcost = new_gcost
-                    n.hcost = new_hcost
-                    n.parent = current
+            if n.type == 'unseen' or new_gcost + new_hcost < n.cost:
+                n.type = 'discovered'
+                n.parent = current
+                n.gcost, n.hcost = new_gcost, new_hcost
 
 
 def print_completed_path(ascii_field):
