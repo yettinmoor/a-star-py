@@ -1,94 +1,92 @@
+import heapq
+
+
 class Node:
 
+    openedNodes = []
+    closedNodes = []
     target = None
-    field = {}
+    grid = {}
 
-    def __init__(self, x, y, type_):
+    def __init__(self, x, y, state):
         self.x = x
         self.y = y
-        Node.field[(x, y)] = self
-
-        if (type_ == 'target'):
-            self.type = 'unseen'
-            Node.target = self
-        else:
-            self.type = type_
-
-        self.gcost = self.hcost = 0
+        self.walkable = state != 'obstacle'
+        self.gcost = float('inf')
         self.parent = None
+
+        Node.grid[(x, y)] = self
+
+        if (state == 'target'):
+            Node.target = self
+        elif (state == 'start'):
+            heapq.heappush(Node.openedNodes, self)
+            self.gcost = 0
+
+
+    @staticmethod
+    def generate_grid(filename):
+        states = { 'X': 'obstacle', '@': 'target', 'O': 'start' }
+        with open(filename) as f:
+            Node.ascii_grid = [r.strip() for r in f.readlines()]
+            for y, row in enumerate(Node.ascii_grid):
+                for x, node in enumerate(row):
+                    Node(x, y, states.get(node, None))
 
     @property
     def cost(self):
         return self.gcost + self.hcost
 
-    def cost_to_node(self, node):
+    @property
+    def hcost(self):
+        return self.distance(Node.target)
+
+    def __lt__(self, other):
+        return self.cost < other.cost or self.cost == other.cost and self.hcost < other.hcost
+
+    def distance(self, node):
         dx, dy = abs(self.x - node.x), abs(self.y - node.y)
         return 14 * min(dx, dy) + 10 * abs(dx - dy)
 
-    def get_neighbors(self):
+    def update_neighbors(self):
+
         neighbors = []
         for dy in range(-1, 2):
             for dx in range(-1, 2):
-                neighbors.append(Node.field.get((self.x + dx, self.y + dy), None))
-        return [n for n in neighbors if n and n.type in ['discovered', 'unseen']]
+                neighbors.append(Node.grid.get((self.x + dx, self.y + dy), None))
 
-    def get_path(self):
-        node = self
+        for neighbor in [n for n in neighbors if n and n.walkable and n not in Node.closedNodes]:
+
+            if (gcost := self.gcost + self.distance(neighbor)) < neighbor.gcost:
+                neighbor.parent = self
+                neighbor.gcost = gcost
+                if neighbor not in Node.openedNodes:
+                    heapq.heappush(Node.openedNodes, neighbor)
+
+    @staticmethod
+    def get_next():
+        n = heapq.heappop(Node.openedNodes)
+        Node.closedNodes.append(n)
+        return n
+
+    @staticmethod
+    def find_path():
+        while Node.openedNodes and (current := Node.get_next()) is not Node.target:
+            current.update_neighbors()
+
+    @staticmethod
+    def print_path():
+
+        current = Node.target
         path = []
-        while (node := node.parent):
-            path.append(node)
-        return path
+
+        while (current := current.parent) and current.parent:
+            path.append((current.x, current.y))
+
+        for row in [['!' if (x, y) in path else n for x, n in enumerate(row)] for y, row in enumerate(Node.ascii_grid)]:
+            print(''.join(row))
 
 
-def generate_field(filename):
-
-    types = { 'X': 'obstacle', '@': 'target', 'O': 'discovered', '.': 'unseen' }
-
-    with open(filename) as f:
-        ascii_field = [r.strip() for r in f.readlines()]
-        for y, row in enumerate(ascii_field):
-            for x, node in enumerate(row):
-                Node(x, y, types[node])
-
-    return ascii_field
-
-
-def find_path():
-
-    while True:
-
-        current = None
-        for n in [n for n in Node.field.values() if n.type == 'discovered']:
-            if not current or n.cost < current.cost:
-                current = n
-
-        if current is Node.target:
-            break
-
-        current.type = 'visited'
-
-        for n in current.get_neighbors(): # Returns only non-obstacle unseen/discovered nodes
-
-            new_gcost = current.gcost + current.cost_to_node(n)
-            new_hcost = n.cost_to_node(Node.target)
-
-            if n.type == 'unseen' or new_gcost + new_hcost < n.cost:
-                n.type = 'discovered'
-                n.parent = current
-                n.gcost, n.hcost = new_gcost, new_hcost
-
-
-def print_completed_path(ascii_field):
-
-    pathed_field = [[c for c in row] for row in ascii_field]
-
-    for node in Node.target.get_path():
-        pathed_field[node.y][node.x] = '!'
-
-    for row in pathed_field:
-        print(''.join(row))
-
-
-ascii_field = generate_field('astar.txt')
-find_path()
-print_completed_path(ascii_field)
+Node.generate_grid('astar.txt')
+Node.find_path()
+Node.print_path()
