@@ -13,6 +13,7 @@ class Path:
         self.y = y
         self.walkable = state != 'obstacle'
         self.gcost = float('inf')
+        self.tcost = 0
         self.parent = None
 
         Path.grid[(x, y)] = self
@@ -22,6 +23,8 @@ class Path:
         elif (state == 'start'):
             heappush(Path.openedNodes, self)
             self.gcost = 0
+        elif (state == 'swamp'):
+            self.tcost = 8
 
     def __lt__(self, other):
         return self.cost < other.cost or self.cost == other.cost and self.hcost < other.hcost
@@ -32,7 +35,7 @@ class Path:
 
     @property
     def cost(self):
-        return self.gcost + self.hcost
+        return self.gcost + self.hcost + self.tcost
 
     def update_neighbors(self):
         neighbors = []
@@ -53,7 +56,7 @@ class Path:
 
     @staticmethod
     def generate_grid(filename):
-        states = { 'X': 'obstacle', '@': 'target', 'O': 'start' }
+        states = { 'X': 'obstacle', '@': 'target', 'O': 'start', 'c': 'swamp' }
         with open(filename) as f:
             Path.ascii_grid = [r.strip() for r in f.readlines()]
             for y, row in enumerate(Path.ascii_grid):
